@@ -20,26 +20,30 @@
       "name": "Indicateurs de Valeur Ajoutée des Lycées",
       "provider": "data.education.gouv.fr",
       "type": "csv",
-      "url": "https://data.education.gouv.fr/api/explore/v2.1/catalog/datasets/fr-en-indicateurs-de-valeur-ajoutee-des-lycees-denseignement-general-et-technologique/exports/csv",
+      "url": "https://data.education.gouv.fr/api/explore/v2.1/catalog/datasets/fr-en-indicateurs-de-resultat-des-lycees-gt_v2/exports/csv",
+      "dataset_id": "fr-en-indicateurs-de-resultat-des-lycees-gt_v2",
       "target_table": "aggregated_data_lycees_2024",
       "importer": "scripts/import_lycees.js",
       "frequency": "yearly",
       "expected_months": [3, 4, 5],
-      "description": "Performance indicators for lycées (IVA)",
-      "enabled": true
+      "description": "Performance indicators for lycées (IVA) - General and Technological",
+      "enabled": true,
+      "notes": "Updated to v2 dataset (Feb 2026)"
     },
     {
       "id": "indicateurs-colleges",
       "name": "Indicateurs de Valeur Ajoutée - Collèges",
       "provider": "data.education.gouv.fr",
       "type": "csv",
-      "url": "https://data.education.gouv.fr/api/explore/v2.1/catalog/datasets/fr-en-indicateurs-de-resultat-des-colleges/exports/csv",
+      "url": "https://data.education.gouv.fr/api/explore/v2.1/catalog/datasets/fr-en-indicateurs-valeur-ajoutee-colleges/exports/csv",
+      "dataset_id": "fr-en-indicateurs-valeur-ajoutee-colleges",
       "target_table": "metrics_colleges_2024",
       "importer": "scripts/import_colleges.js",
       "frequency": "yearly",
       "expected_months": [3, 4, 5],
-      "description": "Performance indicators for collèges",
-      "enabled": true
+      "description": "Performance indicators for collèges (IVAC)",
+      "enabled": true,
+      "notes": "Updated dataset name (Feb 2026)"
     },
     {
       "id": "lycees-geolocalisation",
@@ -56,17 +60,19 @@
     },
     {
       "id": "dvf-mutations-immobilieres",
-      "name": "DVF - Demandes de Valeurs Foncières",
+      "name": "DVF - Indicateurs Immobiliers par Commune",
       "provider": "data.gouv.fr",
       "type": "csv",
-      "url": "https://files.data.gouv.fr/geo-dvf/latest/csv/",
+      "url": "https://static.data.gouv.fr/resources/indicateurs-immobiliers-par-commune-et-par-annee-prix-et-volumes-sur-la-periode-2014-2024/20250707-085855/communesdvf2024.csv",
+      "dataset_id": "indicateurs-immobiliers-par-commune-et-par-annee-prix-et-volumes-sur-la-periode-2014-2024",
       "target_table": "mutations_immo_2024",
       "importer": "scripts/import_dvf.js",
-      "frequency": "biannual",
-      "expected_months": [4, 10],
-      "description": "Real estate transactions",
-      "enabled": false,
-      "notes": "Large dataset, manual download recommended"
+      "frequency": "yearly",
+      "expected_months": [7],
+      "description": "Aggregated real estate indicators by commune (transaction counts, average prices, surface areas)",
+      "license": "ODbL",
+      "enabled": true,
+      "notes": "Pre-aggregated dataset published by Boris Mericskay. Updated July 2025 with 2024 data."
     },
     {
       "id": "communes-france",
@@ -80,6 +86,51 @@
       "expected_months": [1],
       "description": "French communes reference data",
       "enabled": true
+    },
+    {
+      "id": "ips-lycees",
+      "name": "Indices de Position Sociale des Lycées",
+      "provider": "data.education.gouv.fr",
+      "type": "csv",
+      "url": "https://data.education.gouv.fr/api/explore/v2.1/catalog/datasets/fr-en-ips-lycees-ap2023/exports/csv",
+      "dataset_id": "fr-en-ips-lycees-ap2023",
+      "target_table": "ips_lycees",
+      "importer": "scripts/import_ips_lycees.js",
+      "frequency": "yearly",
+      "expected_months": [10, 11],
+      "description": "Social position index for lycées (IPS) - 7,243 establishments",
+      "enabled": true,
+      "notes": "Dataset from 2023 onwards, updated Oct 2024"
+    },
+    {
+      "id": "ips-colleges",
+      "name": "Indices de Position Sociale des Collèges",
+      "provider": "data.education.gouv.fr",
+      "type": "csv",
+      "url": "https://data.education.gouv.fr/api/explore/v2.1/catalog/datasets/fr-en-ips-colleges-ap2023/exports/csv",
+      "dataset_id": "fr-en-ips-colleges-ap2023",
+      "target_table": "ips_colleges",
+      "importer": "scripts/import_ips_colleges.js",
+      "frequency": "yearly",
+      "expected_months": [10, 11],
+      "description": "Social position index for collèges (IPS) - 13,972 establishments",
+      "enabled": true,
+      "notes": "Dataset from 2023 onwards, updated Oct 2023"
+    },
+    {
+      "id": "criminalite-communale",
+      "name": "Base statistique communale de la délinquance",
+      "provider": "data.gouv.fr",
+      "type": "csv",
+      "url": "https://static.data.gouv.fr/resources/bases-statistiques-communale-departementale-et-regionale-de-la-delinquance-enregistree-par-la-police-et-la-gendarmerie-nationales/20250710-144817/donnee-data.gouv-2024-geographie2025-produit-le2025-06-04.csv.gz",
+      "target_table": "criminalite_2023",
+      "importer": "scripts/import_criminalite.js",
+      "frequency": "yearly",
+      "expected_months": [7],
+      "description": "Crime and delinquency statistics by commune from police and gendarmerie - 35.9 MB compressed",
+      "compression": "gzip",
+      "enabled": true,
+      "notes": "Source: SSMSI (Service statistique ministériel de la sécurité intérieure). Includes indicators like violent crimes, thefts, etc."
     }
   ]
 }

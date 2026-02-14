@@ -3,203 +3,249 @@
 require('dotenv').config();
 const fs = require('fs');
 const csv = require('csv-parser');
-const { getClient, end } = require('../config/db_config');
+const { query, end } = require('../config/db_config');
 
 /**
- * Import ONISEP establishments from CSV
- * @param {string} filePath - Path to CSV file
+ * Import ONISEP secondary education establishments data
+ * Full dataset with establishments details, addresses, and coordinates
+ *
+ * @param {string} csvPath - Path to CSV file
+ * @param {string} targetTable - Target table name (default: onisep_etablissements_2024)
  */
-async function run(filePath) {
-    console.log(`Importing ONISEP data from: ${filePath}`);
-
-    if (!fs.existsSync(filePath)) {
-        throw new Error(`File not found: ${filePath}`);
-    }
-
-    const records = [];
-
-    // Parse CSV
-    return new Promise((resolve, reject) => {
-        fs.createReadStream(filePath)
-            .pipe(csv())
-            .on('data', (row) => {
-                records.push({
-                    code_uai: row.code_uai || null,
-                    n_siret: row.n_siret || null,
-                    nom: row.nom,
-                    sigle: row.sigle || null,
-                    type_etablissement: row.type_detablissement,
-                    statut: row.statut,
-                    tutelle: row.tutelle || null,
-                    adresse: row.adresse,
-                    cp: row.cp,
-                    commune: row.commune,
-                    commune_cog: row.commune_cog,
-                    departement: row.departement,
-                    academie: row.academie,
-                    region: row.region,
-                    region_cog: row.region_cog,
-                    longitude: parseFloat(row.longitude_x) || null,
-                    latitude: parseFloat(row.latitude_y) || null,
-                    telephone: row.telephone || null,
-                    url_onisep: row.url_et_id_onisep || null,
-                    journees_portes_ouvertes: row.journees_portes_ouvertes || null,
-                    langues_enseignees: row.langues_enseignees || null,
-                    date_creation: row.date_creation || null,
-                    date_modification: row.date_de_modification || null
-                });
-            })
-            .on('end', async () => {
-                console.log(`✅ Parsed ${records.length} establishments`);
-
-                try {
-                    await importRecords(records);
-                    console.log('✅ Import complete');
-                    resolve();
-                } catch (error) {
-                    reject(error);
-                }
-            })
-            .on('error', reject);
-    });
-}
-
-/**
- * Bulk import records to database
- * @param {Array} records - Array of establishment records
- */
-async function importRecords(records) {
-    const client = await getClient();
+async function importONISEPData(csvPath, targetTable = 'onisep_etablissements_2024') {
+    console.log('🏫 Importing ONISEP Établissements Data');
+    console.log('=======================================\n');
+    console.log(`File: ${csvPath}`);
+    console.log(`Target table: public.${targetTable}\n`);
 
     try {
-        await client.query('BEGIN');
+        // Read and parse CSV
+        console.log('⏳ Reading CSV file...');
+        const records = [];
+        let lineNumber = 0;
 
-        console.log('💾 Importing to database...');
+        await new Promise((resolve, reject) => {
+            fs.createReadStream(csvPath)
+                .pipe(csv({
+                    separator: ';',
+                    skipLines: 0,
+                    // Let csv-parser auto-detect headers
+                }))
+                .on('data', (row) => {
+                    lineNumber++;
 
-        // Create table if not exists
-        await client.query(`
-            CREATE TABLE IF NOT EXISTS onisep_etablissements (
-                code_uai VARCHAR(8) PRIMARY KEY,
-                n_siret VARCHAR(14),
-                nom TEXT NOT NULL,
-                sigle VARCHAR(50),
-                type_etablissement VARCHAR(100),
-                statut VARCHAR(50),
-                tutelle TEXT,
-                adresse TEXT,
-                cp VARCHAR(10),
-                commune VARCHAR(100),
-                commune_cog VARCHAR(10),
-                departement VARCHAR(50),
-                academie VARCHAR(50),
-                region VARCHAR(50),
-                region_cog VARCHAR(5),
-                longitude DECIMAL(10, 7),
-                latitude DECIMAL(10, 7),
-                geom GEOMETRY(POINT, 4326),
-                telephone VARCHAR(20),
-                url_onisep TEXT,
-                journees_portes_ouvertes TEXT,
-                langues_enseignees TEXT,
-                date_creation TIMESTAMP,
-                date_modification TIMESTAMP,
-                last_synced TIMESTAMP DEFAULT NOW()
-            )
-        `);
+                    // Get the first column name (should be code UAI or similar with BOM)
+                    const keys = Object.keys(row);
+                    if (keys.length === 0) return;
 
-        // Create indexes if not exist
-        await client.query(`
-            CREATE INDEX IF NOT EXISTS idx_onisep_type ON onisep_etablissements(type_etablissement);
-            CREATE INDEX IF NOT EXISTS idx_onisep_statut ON onisep_etablissements(statut);
-            CREATE INDEX IF NOT EXISTS idx_onisep_academie ON onisep_etablissements(academie);
-            CREATE INDEX IF NOT EXISTS idx_onisep_commune_cog ON onisep_etablissements(commune_cog);
-        `);
+                    // Find code UAI column (might have BOM or quotes)
+                    const codeUaiKey = keys.find(k => k.includes('code UAI') || k.includes('UAI'));
+                    if (!codeUaiKey || !row[codeUaiKey] || row[codeUaiKey].trim() === '') {
+                        return;
+                    }
 
-        let imported = 0;
-        let skipped = 0;
+                    // Helper functions to parse values
+                    const parseValue = (val) => {
+                        if (!val || typeof val !== 'string') return null;
+                        if (val.trim() === '') return null;
+                        return val.trim();
+                    };
 
-        for (const record of records) {
-            // Skip records without UAI
-            if (!record.code_uai) {
-                skipped++;
-                continue;
-            }
+                    const parseDecimal = (val) => {
+                        if (!val || typeof val !== 'string') return null;
+                        if (val.trim() === '') return null;
+                        const num = parseFloat(val.replace(',', '.'));
+                        return isNaN(num) ? null : num;
+                    };
 
-            await client.query(`
-                INSERT INTO onisep_etablissements
-                (code_uai, n_siret, nom, sigle, type_etablissement, statut, tutelle,
-                 adresse, cp, commune, commune_cog, departement, academie, region, region_cog,
-                 longitude, latitude, geom, telephone, url_onisep,
-                 journees_portes_ouvertes, langues_enseignees,
-                 date_creation, date_modification, last_synced)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
-                        ST_SetSRID(ST_MakePoint($16, $17), 4326),
-                        $18, $19, $20, $21, $22, $23, NOW())
-                ON CONFLICT (code_uai) DO UPDATE SET
-                    nom = EXCLUDED.nom,
-                    type_etablissement = EXCLUDED.type_etablissement,
-                    statut = EXCLUDED.statut,
-                    adresse = EXCLUDED.adresse,
-                    commune = EXCLUDED.commune,
-                    longitude = EXCLUDED.longitude,
-                    latitude = EXCLUDED.latitude,
-                    geom = EXCLUDED.geom,
-                    telephone = EXCLUDED.telephone,
-                    date_modification = EXCLUDED.date_modification,
-                    last_synced = NOW()
-            `, [
-                record.code_uai, record.n_siret, record.nom, record.sigle,
-                record.type_etablissement, record.statut, record.tutelle,
-                record.adresse, record.cp, record.commune, record.commune_cog,
-                record.departement, record.academie, record.region, record.region_cog,
-                record.longitude, record.latitude,
-                record.telephone, record.url_onisep,
-                record.journees_portes_ouvertes, record.langues_enseignees,
-                record.date_creation, record.date_modification
-            ]);
+                    const parseDate = (val) => {
+                        if (!val || typeof val !== 'string') return null;
+                        if (val.trim() === '') return null;
+                        // Format: DD/MM/YYYY
+                        const parts = val.trim().split('/');
+                        if (parts.length === 3) {
+                            return `${parts[2]}-${parts[1]}-${parts[0]}`; // Convert to YYYY-MM-DD
+                        }
+                        return null;
+                    };
 
-            imported++;
+                    // Find column keys (handling BOM and variations)
+                    const getColumn = (partialName) => {
+                        const key = keys.find(k => k.includes(partialName));
+                        return key ? row[key] : null;
+                    };
 
-            if (imported % 1000 === 0) {
-                console.log(`  Progress: ${imported}/${records.length} (${((imported/records.length)*100).toFixed(1)}%)`);
-            }
+                    // Map all CSV columns to database columns
+                    const record = {
+                        code_uai: parseValue(getColumn('UAI')),
+                        numero_siret: parseValue(getColumn('SIRET')),
+                        type_etablissement: parseValue(getColumn("tablissement")), // matches "établissement"
+                        nom: parseValue(row['nom']),
+                        sigle: parseValue(row['sigle']),
+                        statut: parseValue(row['statut']),
+                        tutelle: parseValue(row['tutelle']),
+                        universite_rattachement_libelle_uai: parseValue(getColumn('rattachement libellé')),
+                        universite_rattachement_id_url: parseValue(getColumn('rattachement ID')),
+                        etablissements_lies_libelles: parseValue(getColumn('liés libellés') || getColumn('lies libelles')),
+                        etablissements_lies_url_id: parseValue(getColumn('liés URL') || getColumn('lies URL')),
+                        adresse_1: parseValue(row['adresse']),
+                        adresse_2: null, // Second address column if exists
+                        code_postal: parseValue(row['CP']),
+                        commune: parseValue(row['commune']),
+                        commune_cog: parseValue(getColumn('COG')),
+                        cedex: parseValue(row['cedex']),
+                        telephone: parseValue(row['telephone']),
+                        arrondissement: parseValue(row['arrondissement']),
+                        departement: parseValue(getColumn('partement')),
+                        academie: parseValue(getColumn('acad') || getColumn('mie')),
+                        region: parseValue(getColumn('gion') && !getColumn('gion').includes('(')),
+                        region_cog: parseValue(getColumn('gion (COG)') || getColumn('gion (') && row[keys.find(k => k.includes('gion ('))]),
+                        longitude: parseDecimal(getColumn('longitude')),
+                        latitude: parseDecimal(getColumn('latitude')),
+                        journees_portes_ouvertes: parseValue(getColumn('portes ouvertes')),
+                        langues_enseignees: parseValue(getColumn('langues')),
+                        url_id_onisep: parseValue(getColumn('URL et ID')),
+                        date_creation: parseDate(getColumn('création') || getColumn('creation')),
+                        date_modification: parseDate(getColumn('modification'))
+                    };
+
+                    records.push(record);
+
+                    if (records.length % 1000 === 0) {
+                        process.stdout.write(`\rParsed ${records.length} records...`);
+                    }
+                })
+                .on('end', () => {
+                    console.log(`\n✅ Parsed ${records.length} records\n`);
+                    resolve();
+                })
+                .on('error', reject);
+        });
+
+        if (records.length === 0) {
+            console.log('⚠️  No records found in CSV');
+            return;
         }
 
-        await client.query('COMMIT');
+        // Begin transaction
+        console.log('⏳ Starting database import...');
+        await query('BEGIN');
 
-        console.log(`📊 Import summary:`);
-        console.log(`  - Imported: ${imported}`);
-        console.log(`  - Skipped (no UAI): ${skipped}`);
+        // Truncate table
+        console.log(`   Clearing existing data from ${targetTable}...`);
+        await query(`TRUNCATE TABLE public.${targetTable}`);
+
+        // Bulk insert
+        console.log('   Inserting records...');
+
+        const columns = [
+            'code_uai', 'numero_siret', 'type_etablissement', 'nom', 'sigle',
+            'statut', 'tutelle', 'universite_rattachement_libelle_uai', 'universite_rattachement_id_url',
+            'etablissements_lies_libelles', 'etablissements_lies_url_id',
+            'adresse_1', 'adresse_2', 'code_postal', 'commune', 'commune_cog',
+            'cedex', 'telephone', 'arrondissement', 'departement', 'academie',
+            'region', 'region_cog', 'longitude', 'latitude',
+            'journees_portes_ouvertes', 'langues_enseignees', 'url_id_onisep',
+            'date_creation', 'date_modification'
+        ];
+
+        // Insert in batches (30 columns per record)
+        const batchSize = 500;
+        const numColumns = 30;
+
+        for (let i = 0; i < records.length; i += batchSize) {
+            const batch = records.slice(i, i + batchSize);
+
+            const values = batch.map((r, idx) => {
+                const offset = idx;
+                const params = [];
+                for (let j = 1; j <= numColumns; j++) {
+                    params.push(`$${offset * numColumns + j}`);
+                }
+                return `(${params.join(', ')})`;
+            }).join(',');
+
+            const params = batch.flatMap(r => [
+                r.code_uai, r.numero_siret, r.type_etablissement, r.nom, r.sigle,
+                r.statut, r.tutelle, r.universite_rattachement_libelle_uai, r.universite_rattachement_id_url,
+                r.etablissements_lies_libelles, r.etablissements_lies_url_id,
+                r.adresse_1, r.adresse_2, r.code_postal, r.commune, r.commune_cog,
+                r.cedex, r.telephone, r.arrondissement, r.departement, r.academie,
+                r.region, r.region_cog, r.longitude, r.latitude,
+                r.journees_portes_ouvertes, r.langues_enseignees, r.url_id_onisep,
+                r.date_creation, r.date_modification
+            ]);
+
+            await query(
+                `INSERT INTO public.${targetTable} (${columns.join(', ')}) VALUES ${values}`,
+                params
+            );
+
+            process.stdout.write(`\r   Imported ${Math.min(i + batchSize, records.length)}/${records.length} records...`);
+        }
+
+        // Commit transaction
+        await query('COMMIT');
+        console.log('\n\n✅ Import complete!');
+
+        // Show summary
+        const result = await query(`
+            SELECT
+                COUNT(*) as total_etablissements,
+                COUNT(DISTINCT type_etablissement) as types_etablissement,
+                COUNT(DISTINCT academie) as total_academies,
+                COUNT(DISTINCT departement) as total_departements,
+                COUNT(DISTINCT region) as total_regions,
+                COUNT(CASE WHEN statut = 'public' THEN 1 END) as publics,
+                COUNT(CASE WHEN statut = 'privé' THEN 1 END) as prives,
+                COUNT(CASE WHEN longitude IS NOT NULL AND latitude IS NOT NULL THEN 1 END) as avec_coordonnees
+            FROM public.${targetTable}
+        `);
+
+        const typesResult = await query(`
+            SELECT type_etablissement, COUNT(*) as count
+            FROM public.${targetTable}
+            WHERE type_etablissement IS NOT NULL
+            GROUP BY type_etablissement
+            ORDER BY count DESC
+            LIMIT 10
+        `);
+
+        console.log('\n📊 Summary:');
+        console.log(`   Total établissements: ${result.rows[0].total_etablissements}`);
+        console.log(`   Types d'établissement: ${result.rows[0].types_etablissement}`);
+        console.log(`   Régions: ${result.rows[0].total_regions}`);
+        console.log(`   Académies: ${result.rows[0].total_academies}`);
+        console.log(`   Départements: ${result.rows[0].total_departements}`);
+        console.log(`   Public: ${result.rows[0].publics}`);
+        console.log(`   Privé: ${result.rows[0].prives}`);
+        console.log(`   With coordinates: ${result.rows[0].avec_coordonnees}`);
+
+        console.log('\n📋 Top types d\'établissement:');
+        typesResult.rows.forEach(row => {
+            console.log(`   ${row.type_etablissement}: ${row.count}`);
+        });
+        console.log();
 
     } catch (error) {
-        await client.query('ROLLBACK');
+        await query('ROLLBACK');
+        console.error('\n❌ Import failed:', error.message);
+        console.error(error.stack);
         throw error;
     } finally {
-        client.release();
+        await end();
     }
 }
 
 // CLI execution
 if (require.main === module) {
-    const filePath = process.argv[2];
+    const csvPath = process.argv[2] || './data/downloads/onisep_etablissements_2024.csv';
+    const targetTable = process.argv[3] || 'onisep_etablissements_2024';
 
-    if (!filePath) {
-        console.error('Usage: node import_onisep.js <csv_file_path>');
+    importONISEPData(csvPath, targetTable).catch(err => {
+        console.error(err);
         process.exit(1);
-    }
-
-    run(filePath)
-        .then(() => {
-            console.log('✅ Done');
-            end();
-            process.exit(0);
-        })
-        .catch(err => {
-            console.error('❌ Error:', err.message);
-            console.error(err.stack);
-            end();
-            process.exit(1);
-        });
+    });
 }
 
-module.exports = { run };
+module.exports = { importONISEPData };

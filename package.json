@@ -4,7 +4,9 @@
   "description": "Automated ETL pipeline for eduInfo educational data",
   "main": "index.js",
   "scripts": {
+    "validate": "node scripts/validate_sources.js",
     "check-updates": "node scripts/check_updates.js",
+    "check-updates:detailed": "node scripts/check_updates_detailed.js",
     "download": "node scripts/download_data.js",
     "import:onisep": "node scripts/import_onisep.js",
     "import:lycees": "node scripts/import_lycees.js",
@@ -14,6 +16,7 @@
     "refresh-views": "node scripts/refresh_views.js",
     "pipeline": "node scripts/run_pipeline.js",
     "pipeline:check-only": "node scripts/run_pipeline.js --check-only",
+    "db:backup": "bash scripts/backup_database.sh",
     "test": "jest",
     "test:watch": "jest --watch"
   },

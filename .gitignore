@@ -13,6 +13,14 @@ data/downloads/*.csv
 data/downloads/*.json
 data/downloads/*.xlsx
 data/downloads/*.zip
+data/downloads/*.gz
+
+# Sample files (keep README)
+data/samples/*.csv
+data/samples/*.json
+data/samples/*.xlsx
+data/samples/*.gz
+!data/samples/README.md
 
 # Logs
 data/logs/*.log
@@ -35,3 +43,6 @@ coverage/
 # Temporary files
 tmp/
 temp/
+
+# Backup from original eduinfo project
+backup_from_eduinfo_orig/
