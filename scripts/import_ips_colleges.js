@@ -10,13 +10,18 @@ const { query, end } = require('../config/db_config');
  * Social position index for French middle schools - Full dataset
  *
  * @param {string} csvPath - Path to CSV file
- * @param {string} targetTable - Target table name (default: ips_colleges_2024)
+ * @param {object} options - Import options
+ * @param {string} options.schema - Target schema (default: 'public')
+ * @param {string} options.targetTable - Target table name (default: 'ips_colleges')
  */
-async function importIPSCollegesData(csvPath, targetTable = 'ips_colleges_2024') {
+async function importIPSCollegesData(csvPath, options = {}) {
+    const schema = options.schema || 'public';
+    const targetTable = options.targetTable || 'ips_colleges';
+
     console.log('🎓 Importing IPS Collèges Data');
     console.log('==============================\n');
     console.log(`File: ${csvPath}`);
-    console.log(`Target table: public.${targetTable}\n`);
+    console.log(`Target: ${schema}.${targetTable}\n`);
 
     try {
         // Read and parse CSV
@@ -108,7 +113,7 @@ async function importIPSCollegesData(csvPath, targetTable = 'ips_colleges_2024')
 
         // Truncate table
         console.log(`   Clearing existing data from ${targetTable}...`);
-        await query(`TRUNCATE TABLE public.${targetTable}`);
+        await query(`TRUNCATE TABLE ${schema}.${targetTable}`);
 
         // Bulk insert
         console.log('   Inserting records...');
@@ -150,7 +155,7 @@ async function importIPSCollegesData(csvPath, targetTable = 'ips_colleges_2024')
             ]);
 
             await query(
-                `INSERT INTO public.${targetTable} (${columns.join(', ')}) VALUES ${values}`,
+                `INSERT INTO ${schema}.${targetTable} (${columns.join(', ')}) VALUES ${values}`,
                 params
             );
 
@@ -173,7 +178,7 @@ async function importIPSCollegesData(csvPath, targetTable = 'ips_colleges_2024')
                 ROUND(MAX(ips)::numeric, 2) as max_ips,
                 COUNT(CASE WHEN secteur = 'public' THEN 1 END) as colleges_publics,
                 COUNT(CASE WHEN secteur = 'prive' THEN 1 END) as colleges_prives
-            FROM public.${targetTable}
+            FROM ${schema}.${targetTable}
             WHERE ips IS NOT NULL
         `);
 
@@ -200,10 +205,38 @@ async function importIPSCollegesData(csvPath, targetTable = 'ips_colleges_2024')
 
 // CLI execution
 if (require.main === module) {
-    const csvPath = process.argv[2] || './data/downloads/ips_colleges_2024.csv';
-    const targetTable = process.argv[3] || 'ips_colleges_2024';
+    // Parse command-line arguments
+    const args = process.argv.slice(2);
 
-    importIPSCollegesData(csvPath, targetTable).catch(err => {
+    // Extract options
+    let csvPath = './data/downloads/ips_colleges_2024.csv';
+    let schema = 'public';
+    let targetTable = 'ips_colleges';
+
+    // Parse --schema
+    const schemaIndex = args.indexOf('--schema');
+    if (schemaIndex >= 0 && args[schemaIndex + 1]) {
+        schema = args[schemaIndex + 1];
+    }
+
+    // Parse --table or --target-table
+    const tableIndex = Math.max(args.indexOf('--table'), args.indexOf('--target-table'));
+    if (tableIndex >= 0 && args[tableIndex + 1]) {
+        targetTable = args[tableIndex + 1];
+    }
+
+    // Parse CSV path (first non-flag argument)
+    const csvArg = args.find(arg => !arg.startsWith('--') && args.indexOf(arg) === args.lastIndexOf(arg));
+    if (csvArg) {
+        csvPath = csvArg;
+    }
+
+    console.log('📝 Arguments:');
+    console.log(`   Schema: ${schema}`);
+    console.log(`   Table: ${targetTable}`);
+    console.log(`   CSV: ${csvPath}\n`);
+
+    importIPSCollegesData(csvPath, { schema, targetTable }).catch(err => {
         console.error(err);
         process.exit(1);
     });
