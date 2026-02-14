@@ -15,6 +15,10 @@ data/downloads/*.xlsx
 data/downloads/*.zip
 data/downloads/*.gz
 
+# Database backups (too large for git)
+data/backups/*.sql
+data/backups/*.sql.gz
+
 # Sample files (keep README)
 data/samples/*.csv
 data/samples/*.json
