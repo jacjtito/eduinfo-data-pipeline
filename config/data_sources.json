@@ -1,0 +1,85 @@
+{
+  "sources": [
+    {
+      "id": "onisep-secondary",
+      "name": "ONISEP Structures Enseignement Secondaire",
+      "provider": "ONISEP",
+      "type": "csv",
+      "url": "https://api.opendata.onisep.fr/downloads/5fa5816ac6a6e/5fa5816ac6a6e.csv",
+      "api_url": "https://api.opendata.onisep.fr/api/1.0/dataset/5fa5816ac6a6e/search",
+      "target_table": "onisep_etablissements",
+      "importer": "scripts/import_onisep.js",
+      "frequency": "monthly",
+      "expected_months": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+      "description": "15,266 établissements secondaires (collèges, lycées, CFA)",
+      "license": "ODbL",
+      "enabled": true
+    },
+    {
+      "id": "lycees-indicateurs-iva",
+      "name": "Indicateurs de Valeur Ajoutée des Lycées",
+      "provider": "data.education.gouv.fr",
+      "type": "csv",
+      "url": "https://data.education.gouv.fr/api/explore/v2.1/catalog/datasets/fr-en-indicateurs-de-valeur-ajoutee-des-lycees-denseignement-general-et-technologique/exports/csv",
+      "target_table": "aggregated_data_lycees_2024",
+      "importer": "scripts/import_lycees.js",
+      "frequency": "yearly",
+      "expected_months": [3, 4, 5],
+      "description": "Performance indicators for lycées (IVA)",
+      "enabled": true
+    },
+    {
+      "id": "indicateurs-colleges",
+      "name": "Indicateurs de Valeur Ajoutée - Collèges",
+      "provider": "data.education.gouv.fr",
+      "type": "csv",
+      "url": "https://data.education.gouv.fr/api/explore/v2.1/catalog/datasets/fr-en-indicateurs-de-resultat-des-colleges/exports/csv",
+      "target_table": "metrics_colleges_2024",
+      "importer": "scripts/import_colleges.js",
+      "frequency": "yearly",
+      "expected_months": [3, 4, 5],
+      "description": "Performance indicators for collèges",
+      "enabled": true
+    },
+    {
+      "id": "lycees-geolocalisation",
+      "name": "Annuaire de l'Éducation - Lycées",
+      "provider": "data.education.gouv.fr",
+      "type": "csv",
+      "url": "https://data.education.gouv.fr/api/explore/v2.1/catalog/datasets/fr-en-annuaire-education/exports/csv?where=type_etablissement='Lycée'",
+      "target_table": "geodata_lycees",
+      "importer": "scripts/import_geodata.js",
+      "frequency": "quarterly",
+      "expected_months": [1, 4, 7, 10],
+      "description": "Geolocation and contact info for lycées",
+      "enabled": true
+    },
+    {
+      "id": "dvf-mutations-immobilieres",
+      "name": "DVF - Demandes de Valeurs Foncières",
+      "provider": "data.gouv.fr",
+      "type": "csv",
+      "url": "https://files.data.gouv.fr/geo-dvf/latest/csv/",
+      "target_table": "mutations_immo_2024",
+      "importer": "scripts/import_dvf.js",
+      "frequency": "biannual",
+      "expected_months": [4, 10],
+      "description": "Real estate transactions",
+      "enabled": false,
+      "notes": "Large dataset, manual download recommended"
+    },
+    {
+      "id": "communes-france",
+      "name": "Code Officiel Géographique - Communes",
+      "provider": "INSEE",
+      "type": "api",
+      "api_url": "https://geo.api.gouv.fr/communes",
+      "target_table": "info_communes",
+      "importer": "scripts/import_insee.js",
+      "frequency": "yearly",
+      "expected_months": [1],
+      "description": "French communes reference data",
+      "enabled": true
+    }
+  ]
+}
