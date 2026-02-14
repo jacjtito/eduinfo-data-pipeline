@@ -11,13 +11,18 @@ const { query, end } = require('../config/db_config');
  * Handles both gzipped and regular CSV files
  *
  * @param {string} csvPath - Path to CSV file (can be .csv or .csv.gz)
- * @param {string} targetTable - Target table name (default: criminalite_2024)
+ * @param {object} options - Import options
+ * @param {string} options.schema - Target schema (default: 'public')
+ * @param {string} options.targetTable - Target table name (default: 'criminalite_2024')
  */
-async function importCriminaliteData(csvPath, targetTable = 'criminalite_2024') {
+async function importCriminaliteData(csvPath, options = {}) {
+    const schema = options.schema || 'public';
+    const targetTable = options.targetTable || 'criminalite_2024';
+
     console.log('🚨 Importing Crime & Delinquency Data');
     console.log('======================================\n');
     console.log(`File: ${csvPath}`);
-    console.log(`Target table: public.${targetTable}\n`);
+    console.log(`Target: ${schema}.${targetTable}\n`);
 
     try {
         // Read and parse CSV
@@ -105,7 +110,7 @@ async function importCriminaliteData(csvPath, targetTable = 'criminalite_2024') 
 
         // Truncate table
         console.log(`   Clearing existing data from ${targetTable}...`);
-        await query(`TRUNCATE TABLE public.${targetTable}`);
+        await query(`TRUNCATE TABLE ${schema}.${targetTable}`);
 
         // Bulk insert
         console.log('   Inserting records...');
@@ -135,7 +140,7 @@ async function importCriminaliteData(csvPath, targetTable = 'criminalite_2024') 
             ]);
 
             await query(
-                `INSERT INTO public.${targetTable} (${columns.join(', ')}) VALUES ${values}`,
+                `INSERT INTO ${schema}.${targetTable} (${columns.join(', ')}) VALUES ${values}`,
                 params
             );
 
@@ -154,7 +159,7 @@ async function importCriminaliteData(csvPath, targetTable = 'criminalite_2024') 
                 COUNT(DISTINCT indicateur) as total_indicators,
                 MIN(annee) as min_year,
                 MAX(annee) as max_year
-            FROM public.${targetTable}
+            FROM ${schema}.${targetTable}
         `);
 
         console.log('\n📊 Summary:');
@@ -176,10 +181,33 @@ async function importCriminaliteData(csvPath, targetTable = 'criminalite_2024') 
 
 // CLI execution
 if (require.main === module) {
-    const csvPath = process.argv[2] || './data/downloads/criminalite_2024.csv.gz';
-    const targetTable = process.argv[3] || 'criminalite_2024';
+    const args = process.argv.slice(2);
 
-    importCriminaliteData(csvPath, targetTable).catch(err => {
+    let csvPath = './data/downloads/criminalite_2024.csv.gz';
+    let schema = 'public';
+    let targetTable = 'criminalite_2024';
+
+    const schemaIndex = args.indexOf('--schema');
+    if (schemaIndex >= 0 && args[schemaIndex + 1]) {
+        schema = args[schemaIndex + 1];
+    }
+
+    const tableIndex = Math.max(args.indexOf('--table'), args.indexOf('--target-table'));
+    if (tableIndex >= 0 && args[tableIndex + 1]) {
+        targetTable = args[tableIndex + 1];
+    }
+
+    const csvArg = args.find(arg => !arg.startsWith('--') && args.indexOf(arg) === args.lastIndexOf(arg));
+    if (csvArg) {
+        csvPath = csvArg;
+    }
+
+    console.log('📝 Arguments:');
+    console.log(`   Schema: ${schema}`);
+    console.log(`   Table: ${targetTable}`);
+    console.log(`   CSV: ${csvPath}\n`);
+
+    importCriminaliteData(csvPath, { schema, targetTable }).catch(err => {
         console.error(err);
         process.exit(1);
     });

@@ -10,13 +10,18 @@ const { query, end } = require('../config/db_config');
  * Commerce and health services facilities by commune
  *
  * @param {string} csvPath - Path to CSV file
- * @param {string} targetTable - Target table name (default: commerce_sante_2024)
+ * @param {object} options - Import options
+ * @param {string} options.schema - Target schema (default: 'public')
+ * @param {string} options.targetTable - Target table name (default: 'commerce_sante_2024')
  */
-async function importBPEData(csvPath, targetTable = 'commerce_sante_2024') {
+async function importBPEData(csvPath, options = {}) {
+    const schema = options.schema || 'public';
+    const targetTable = options.targetTable || 'commerce_sante_2024';
+
     console.log('📦 Importing BPE Commerce & Santé Data');
     console.log('=====================================\n');
     console.log(`File: ${csvPath}`);
-    console.log(`Target table: public.${targetTable}\n`);
+    console.log(`Target: ${schema}.${targetTable}\n`);
 
     try {
         // Read and parse CSV
@@ -108,7 +113,7 @@ async function importBPEData(csvPath, targetTable = 'commerce_sante_2024') {
 
         // Truncate table
         console.log(`   Clearing existing data from ${targetTable}...`);
-        await query(`TRUNCATE TABLE public.${targetTable}`);
+        await query(`TRUNCATE TABLE ${schema}.${targetTable}`);
 
         // Bulk insert using COPY
         console.log('   Inserting records...');
@@ -146,7 +151,7 @@ async function importBPEData(csvPath, targetTable = 'commerce_sante_2024') {
             ]);
 
             await query(
-                `INSERT INTO public.${targetTable} (${columns.join(', ')}) VALUES ${values}
+                `INSERT INTO ${schema}.${targetTable} (${columns.join(', ')}) VALUES ${values}
                  ON CONFLICT (code_commune) DO UPDATE SET
                     commune = EXCLUDED.commune,
                     police_gendarmerie = EXCLUDED.police_gendarmerie,
@@ -184,7 +189,7 @@ async function importBPEData(csvPath, targetTable = 'commerce_sante_2024') {
                 SUM(CASE WHEN lycee > 0 THEN 1 ELSE 0 END) as communes_avec_lycee,
                 SUM(CASE WHEN college > 0 THEN 1 ELSE 0 END) as communes_avec_college,
                 SUM(CASE WHEN pharmacie > 0 THEN 1 ELSE 0 END) as communes_avec_pharmacie
-            FROM public.${targetTable}
+            FROM ${schema}.${targetTable}
         `);
 
         console.log('\n📊 Summary:');
@@ -206,10 +211,33 @@ async function importBPEData(csvPath, targetTable = 'commerce_sante_2024') {
 
 // CLI execution
 if (require.main === module) {
-    const csvPath = process.argv[2] || './data/samples/equipement_service_population_2024.csv';
-    const targetTable = process.argv[3] || 'commerce_sante_2024';
+    const args = process.argv.slice(2);
 
-    importBPEData(csvPath, targetTable).catch(err => {
+    let csvPath = './data/samples/equipement_service_population_2024.csv';
+    let schema = 'public';
+    let targetTable = 'commerce_sante_2024';
+
+    const schemaIndex = args.indexOf('--schema');
+    if (schemaIndex >= 0 && args[schemaIndex + 1]) {
+        schema = args[schemaIndex + 1];
+    }
+
+    const tableIndex = Math.max(args.indexOf('--table'), args.indexOf('--target-table'));
+    if (tableIndex >= 0 && args[tableIndex + 1]) {
+        targetTable = args[tableIndex + 1];
+    }
+
+    const csvArg = args.find(arg => !arg.startsWith('--') && args.indexOf(arg) === args.lastIndexOf(arg));
+    if (csvArg) {
+        csvPath = csvArg;
+    }
+
+    console.log('📝 Arguments:');
+    console.log(`   Schema: ${schema}`);
+    console.log(`   Table: ${targetTable}`);
+    console.log(`   CSV: ${csvPath}\n`);
+
+    importBPEData(csvPath, { schema, targetTable }).catch(err => {
         console.error(err);
         process.exit(1);
     });

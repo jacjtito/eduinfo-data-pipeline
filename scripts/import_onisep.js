@@ -10,13 +10,18 @@ const { query, end } = require('../config/db_config');
  * Full dataset with establishments details, addresses, and coordinates
  *
  * @param {string} csvPath - Path to CSV file
- * @param {string} targetTable - Target table name (default: onisep_etablissements_2024)
+ * @param {object} options - Import options
+ * @param {string} options.schema - Target schema (default: 'public')
+ * @param {string} options.targetTable - Target table name (default: 'onisep_etablissements')
  */
-async function importONISEPData(csvPath, targetTable = 'onisep_etablissements_2024') {
+async function importONISEPData(csvPath, options = {}) {
+    const schema = options.schema || 'public';
+    const targetTable = options.targetTable || 'onisep_etablissements';
+
     console.log('🏫 Importing ONISEP Établissements Data');
     console.log('=======================================\n');
     console.log(`File: ${csvPath}`);
-    console.log(`Target table: public.${targetTable}\n`);
+    console.log(`Target: ${schema}.${targetTable}\n`);
 
     try {
         // Read and parse CSV
@@ -133,7 +138,7 @@ async function importONISEPData(csvPath, targetTable = 'onisep_etablissements_20
 
         // Truncate table
         console.log(`   Clearing existing data from ${targetTable}...`);
-        await query(`TRUNCATE TABLE public.${targetTable}`);
+        await query(`TRUNCATE TABLE ${schema}.${targetTable}`);
 
         // Bulk insert
         console.log('   Inserting records...');
@@ -177,7 +182,7 @@ async function importONISEPData(csvPath, targetTable = 'onisep_etablissements_20
             ]);
 
             await query(
-                `INSERT INTO public.${targetTable} (${columns.join(', ')}) VALUES ${values}`,
+                `INSERT INTO ${schema}.${targetTable} (${columns.join(', ')}) VALUES ${values}`,
                 params
             );
 
@@ -199,12 +204,12 @@ async function importONISEPData(csvPath, targetTable = 'onisep_etablissements_20
                 COUNT(CASE WHEN statut = 'public' THEN 1 END) as publics,
                 COUNT(CASE WHEN statut = 'privé' THEN 1 END) as prives,
                 COUNT(CASE WHEN longitude IS NOT NULL AND latitude IS NOT NULL THEN 1 END) as avec_coordonnees
-            FROM public.${targetTable}
+            FROM ${schema}.${targetTable}
         `);
 
         const typesResult = await query(`
             SELECT type_etablissement, COUNT(*) as count
-            FROM public.${targetTable}
+            FROM ${schema}.${targetTable}
             WHERE type_etablissement IS NOT NULL
             GROUP BY type_etablissement
             ORDER BY count DESC
@@ -239,10 +244,33 @@ async function importONISEPData(csvPath, targetTable = 'onisep_etablissements_20
 
 // CLI execution
 if (require.main === module) {
-    const csvPath = process.argv[2] || './data/downloads/onisep_etablissements_2024.csv';
-    const targetTable = process.argv[3] || 'onisep_etablissements_2024';
+    const args = process.argv.slice(2);
 
-    importONISEPData(csvPath, targetTable).catch(err => {
+    let csvPath = './data/downloads/onisep_etablissements_2024.csv';
+    let schema = 'public';
+    let targetTable = 'etablissements_onisep';
+
+    const schemaIndex = args.indexOf('--schema');
+    if (schemaIndex >= 0 && args[schemaIndex + 1]) {
+        schema = args[schemaIndex + 1];
+    }
+
+    const tableIndex = Math.max(args.indexOf('--table'), args.indexOf('--target-table'));
+    if (tableIndex >= 0 && args[tableIndex + 1]) {
+        targetTable = args[tableIndex + 1];
+    }
+
+    const csvArg = args.find(arg => !arg.startsWith('--') && args.indexOf(arg) === args.lastIndexOf(arg));
+    if (csvArg) {
+        csvPath = csvArg;
+    }
+
+    console.log('📝 Arguments:');
+    console.log(`   Schema: ${schema}`);
+    console.log(`   Table: ${targetTable}`);
+    console.log(`   CSV: ${csvPath}\n`);
+
+    importONISEPData(csvPath, { schema, targetTable }).catch(err => {
         console.error(err);
         process.exit(1);
     });
